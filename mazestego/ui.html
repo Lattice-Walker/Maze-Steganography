@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maze steganography</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f1ede3; --panel: #faf8f2; --ink: #1c1a15; --muted: #6a6457;
+    --line: #d8d1c0; --field: #ffffff; --paper: #ffffff;
+    --accent: #24543f; --accent-ink: #faf8f2; --warn: #9d2f1c;
+    --start: #5fc28f; --end: #f08a6c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14130f; --panel: #1d1b16; --ink: #ebe6d9; --muted: #a09987;
+      --line: #37332a; --field: #14130f; --paper: #f4f0e6;
+      --accent: #86c9a9; --accent-ink: #11100d; --warn: #f0907a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 32px; margin-bottom: 20px; }
+  h1 {
+    margin: 0; font: 600 26px/1.2 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    text-wrap: balance;
+  }
+  .lede { margin: 4px 0 0; color: var(--muted); }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .tabs button {
+    font: inherit; color: var(--muted); background: none; border: 0; border-radius: 7px;
+    padding: 7px 14px; cursor: pointer; white-space: nowrap;
+  }
+  .tabs button[aria-selected="true"] { color: var(--accent-ink); background: var(--accent); font-weight: 600; }
+
+  main { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+
+  label { display: block; font-weight: 600; margin-top: 14px; }
+  form > label:first-child { margin-top: 0; }
+  label small { font-weight: 400; color: var(--muted); margin-left: 4px; }
+  textarea, input[type="number"], input[type="text"], input[type="file"] {
+    display: block; width: 100%; margin-top: 5px; padding: 8px 10px; font: inherit; font-weight: 400;
+    color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+  }
+  textarea { resize: vertical; min-height: 110px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .meter { margin-top: 8px; }
+  .meter .track { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .meter .fill { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  .meter p { margin: 5px 0 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .meter.over .fill { background: var(--warn); }
+  .meter.over p, .error { color: var(--warn); }
+  .hint { margin: 10px 0 0; color: var(--muted); }
+
+  button.primary, button.plain, a.plain {
+    font: inherit; font-weight: 600; border-radius: 6px; padding: 9px 16px; cursor: pointer;
+    border: 1px solid var(--accent); text-decoration: none; display: inline-block;
+  }
+  button.primary { width: 100%; margin-top: 18px; color: var(--accent-ink); background: var(--accent); }
+  button.plain, a.plain { color: var(--accent); background: none; padding: 6px 12px; }
+  button.plain[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .areas { margin: 14px 0 0; padding: 0; border: 0; min-width: 0; }
+  .areas legend { padding: 0; font-weight: 600; }
+  .areas legend small { font-weight: 400; color: var(--muted); margin-left: 4px; }
+  .areas ol { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+  .areas li {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px;
+    background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+  }
+  .areas li .kind { flex: 1 0 auto; white-space: nowrap; }
+  .areas li .kind b { font-weight: 600; }
+  .areas li input[type="number"] { width: 50px; margin: 0; padding: 4px 6px; }
+  .areas li button {
+    font: inherit; line-height: 1; width: 26px; height: 26px; padding: 0; cursor: pointer;
+    color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 5px;
+  }
+  .areas .add { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+  #status { margin-top: 16px; }
+  #status .track { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  #status .fill { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  #status .line { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  #decoded { margin-top: 16px; }
+  #decoded pre {
+    margin: 6px 0 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere;
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+  }
+
+  .stage { position: sticky; top: 24px; }
+  /* The paper stays light in both themes, so what sits on it uses fixed inks. */
+  .paper {
+    --ink: #1c1a15; --muted: #6a6457; --line: #d8d1c0; --accent: #24543f; --accent-ink: #faf8f2;
+    color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+    min-height: min(70vh, 640px); padding: 16px; display: grid; place-items: center; overflow: auto;
+  }
+  .paper img { display: block; max-width: 100%; max-height: calc(100vh - 190px); mix-blend-mode: multiply; }
+  .paper .empty { color: #8a8475; text-align: center; max-width: 30ch; }
+  .caption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; color: var(--muted); }
+  .caption .actions, .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+  #editor, #board { width: 100%; display: grid; justify-items: center; gap: 12px; }
+  #board-canvas { display: block; touch-action: none; cursor: grab; }
+  #board .tools .hint { margin: 0; flex: 1 1 260px; }
+  .tools { width: 100%; }
+  .tools .gap { flex: 1; }
+  #board .tools .gap { flex: 0; }
+  .tools i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; background: var(--end); }
+  .tools i.start { background: var(--start); border-radius: 50%; }
+  #map-canvas { display: block; touch-action: none; cursor: crosshair; border-radius: 2px; }
+  #editor .hint { margin: 0; text-align: center; max-width: 60ch; }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 820px) {
+    .wrap { padding: 16px; }
+    main { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .stage { position: static; }
+    .paper { min-height: 240px; }
+    .tabs { width: 100%; }
+    .tabs button { flex: 1; padding: 7px 8px; white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Maze steganography</h1>
+    <p class="lede">Hide a message in the walls of a maze, or read one back.</p>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="What to do">
+    <button id="tab-hide" role="tab" aria-controls="hide" aria-selected="true">Hide a message</button>
+    <button id="tab-read" role="tab" aria-controls="read" aria-selected="false">Read a message</button>
+    <button id="tab-map" role="tab" aria-controls="map" aria-selected="false">Custom map</button>
+    <button id="tab-circle" role="tab" aria-controls="circle" aria-selected="false">Circle maze</button>
+    <button id="tab-mixed" role="tab" aria-controls="mixed" aria-selected="false">Mixed map</button>
+  </nav>
+</header>
+
+<main>
+  <section class="panel">
+    <form id="hide" role="tabpanel" aria-labelledby="tab-hide">
+      <label for="hide-message">Message</label>
+      <textarea id="hide-message" spellcheck="false">Meet me at the old lighthouse at midnight. Bring the map.</textarea>
+      <div class="meter" id="hide-meter">
+        <div class="track"><div class="fill"></div></div>
+        <p>&nbsp;</p>
+      </div>
+      <div class="pair">
+        <label>Rows <input id="hide-rows" type="number" min="1" max="80" value="20" required></label>
+        <label>Columns <input id="hide-cols" type="number" min="1" max="80" value="30" required></label>
+      </div>
+      <label>Seed <small>optional</small>
+        <input id="hide-seed" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="hint" id="hide-estimate" hidden></p>
+      <button class="primary" id="hide-go" type="submit">Generate maze</button>
+    </form>
+
+    <form id="read" role="tabpanel" aria-labelledby="tab-read" hidden>
+      <label>Maze file <small>PNG or text</small>
+        <input id="file" type="file" accept=".png,.txt,image/png,text/plain">
+      </label>
+      <label>Seed <small>if one was used</small>
+        <input id="read-seed" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <button class="primary" id="read-go" type="submit">Read message</button>
+      <div id="decoded" hidden>
+        <strong id="decoded-title"></strong>
+        <pre id="decoded-text"></pre>
+        <p class="hint" id="decoded-note" hidden>Some of it is not readable text. If you expected text, check the seed.</p>
+      </div>
+    </form>
+
+    <form id="map" role="tabpanel" aria-labelledby="tab-map" hidden>
+      <label for="map-message">Message</label>
+      <textarea id="map-message" spellcheck="false">The treasure is under the third oak.</textarea>
+      <div class="meter" id="map-meter">
+        <div class="track"><div class="fill"></div></div>
+        <p>&nbsp;</p>
+      </div>
+      <div class="pair">
+        <label>Rows <input id="map-rows" type="number" min="1" max="80" value="16" required></label>
+        <label>Columns <input id="map-cols" type="number" min="1" max="80" value="24" required></label>
+      </div>
+      <label>Seed <small>optional</small>
+        <input id="map-seed" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="hint" id="map-estimate" hidden></p>
+      <button class="primary" id="map-go" type="submit">Generate maze</button>
+    </form>
+
+    <form id="circle" role="tabpanel" aria-labelledby="tab-circle" hidden>
+      <label for="circle-message">Message</label>
+      <textarea id="circle-message" spellcheck="false">All roads lead to the centre.</textarea>
+      <div class="meter" id="circle-meter">
+        <div class="track"><div class="fill"></div></div>
+        <p>&nbsp;</p>
+      </div>
+      <label>Rings <small>around the centre</small>
+        <input id="circle-rings" type="number" min="2" max="30" value="12" required>
+      </label>
+      <label>Seed <small>optional</small>
+        <input id="circle-seed" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="hint" id="circle-estimate" hidden></p>
+      <button class="primary" id="circle-go" type="submit">Generate maze</button>
+    </form>
+
+    <form id="mixed" role="tabpanel" aria-labelledby="tab-mixed" hidden>
+      <label for="mixed-message">Message</label>
+      <textarea id="mixed-message" spellcheck="false">Through the hall, round the well, and into the vault.</textarea>
+      <div class="meter" id="mixed-meter">
+        <div class="track"><div class="fill"></div></div>
+        <p>&nbsp;</p>
+      </div>
+      <fieldset class="areas">
+        <legend>Areas <small>in the order the path crosses them</small></legend>
+        <p class="hint" style="margin-top: 4px">Place them on the board to the right.</p>
+        <ol id="areas"></ol>
+        <div class="add">
+          <button class="plain" type="button" id="add-straight">Add straight area</button>
+          <button class="plain" type="button" id="add-circle">Add circle area</button>
+        </div>
+      </fieldset>
+      <label>Seed <small>optional</small>
+        <input id="mixed-seed" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="hint" id="mixed-estimate" hidden></p>
+      <button class="primary" id="mixed-go" type="submit">Generate maze</button>
+    </form>
+
+    <div id="status" role="status" aria-live="polite" hidden>
+      <div class="track" id="bar"><div class="fill"></div></div>
+      <div class="line">
+        <span id="status-text"></span>
+        <button class="plain" id="cancel" type="button">Cancel</button>
+      </div>
+    </div>
+    <p class="error" id="error" role="alert" hidden></p>
+  </section>
+
+  <section class="stage">
+    <div class="paper">
+      <div id="editor" hidden>
+        <div class="tools" role="toolbar" aria-label="Map tools">
+          <button class="plain" type="button" data-tool="cells" aria-pressed="true">Cells</button>
+          <button class="plain" type="button" data-tool="start" aria-pressed="false"><i class="start"></i>Start</button>
+          <button class="plain" type="button" data-tool="end" aria-pressed="false"><i></i>End</button>
+          <span class="gap"></span>
+          <button class="plain" type="button" id="map-fill">Use every cell</button>
+        </div>
+        <canvas id="map-canvas" tabindex="0" role="img"
+          aria-label="Map editor. Arrow keys move, Space applies the selected tool."></canvas>
+        <p class="hint">With Cells selected, click or drag to take cells out of the maze or put them back.
+          Select Start or End, then click a cell to place it.</p>
+      </div>
+      <div id="board" hidden>
+        <div class="tools" role="toolbar" aria-label="Board tools">
+          <span class="hint">Drag an area to move it; it grows across to meet its neighbours where they face each other. Drag the green and orange dots to move the start and the end.</span>
+          <span class="gap"></span>
+          <button class="plain" type="button" id="board-auto">Reset start and end</button>
+          <button class="plain" type="button" id="board-row">Line up</button>
+        </div>
+        <canvas id="board-canvas" tabindex="0" role="img"
+          aria-label="Board. Click an area to select it, then use the arrow keys to move it."></canvas>
+      </div>
+      <img id="maze" alt="" hidden>
+      <p class="empty" id="empty"></p>
+    </div>
+    <div class="caption" id="caption" hidden>
+      <span id="caption-text"></span>
+      <span class="actions">
+        <button class="plain" id="edit-map" type="button">Edit map</button>
+        <button class="plain" id="readback" type="button">Read it back</button>
+        <a class="plain" id="download" download="maze.png">Download PNG</a>
+      </span>
+    </div>
+  </section>
+</main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(done => setTimeout(done, ms));
+const byteLength = text => new TextEncoder().encode(text).length;
+const MAX_SIDE = 80, MIN_RINGS = 2, MAX_RINGS = 30, MIN_AREAS = 2, MAX_AREAS = 8;
+
+let tab = "hide";
+let job = null;
+let cancelling = false;
+// What each tab shows on the paper: {src, caption, png, seed} once it has a maze.
+const shown = {hide: null, read: null, map: null, circle: null, mixed: null};
+// Whether a tab with an editor is showing it rather than its last result.
+const editing = {map: true, mixed: true};
+const EMPTY = {
+  hide: "Your maze will appear here.",
+  read: "The maze you read will appear here.",
+  circle: "Your maze will appear here.",
+  mixed: "Your maze will appear here.",
+};
+
+// Whether a server is behind this page.  Served as a plain file, as on GitHub
+// Pages, there is none, and the same Python answers from inside the browser.
+const server = fetch("/api/capacity?rows=1&cols=1").then(response => response.ok, () => false);
+
+async function api(path, body) {
+  if (!(await server)) return local(path, body);
+  const response = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+
+// -- without a server -----------------------------------------------------------
+
+// A worker running the Python (see worker.js), and the requests it has yet to
+// answer.  `ask` takes what `api` takes, and a function to tell of progress.
+function pythonWorker() {
+  const worker = new Worker("worker.js", {type: "module"}), waiting = new Map();
+  let asked = 0, broken = null;
+  const drop = error => {
+    for (const call of waiting.values()) call.fail(error);
+    waiting.clear();
+  };
+  worker.onmessage = ({data}) => {
+    const call = waiting.get(data.id);
+    if (!call) return;
+    if (data.progress) { call.progress(data.progress); return; }
+    waiting.delete(data.id);
+    if ("error" in data) call.fail(new Error(data.error));
+    else call.done(data.answer);
+  };
+  worker.onerror = () => drop(broken = new Error("Python could not be started in this browser."));
+  return {
+    ask: (path, body, progress = () => {}) => new Promise((done, fail) => {
+      if (broken) { fail(broken); return; }
+      waiting.set(++asked, {done, fail, progress});
+      worker.postMessage({id: asked, path, body});
+    }),
+    stop() {
+      worker.terminate();
+      drop(broken = new Error("Cancelled."));
+    },
+  };
+}
+
+// One worker answers the meters while another does the long work, which can
+// only be cancelled by stopping its worker and starting a fresh one.
+let quick = null, heavy = null;
+let localJob = {};
+
+// What the server would answer, jobs and all.
+async function local(path, body) {
+  quick ||= pythonWorker();
+  heavy ||= pythonWorker();
+  if (path === "/api/encode" || path === "/api/decode") {
+    const state = localJob = {done: 0, total: 1};
+    heavy.ask(path, body, progress => Object.assign(state, progress))
+      .then(result => { state.result = result; }, error => { state.error = error.message; });
+    return {job: "local"};
+  }
+  if (path.endsWith("/cancel")) {
+    heavy.stop();
+    heavy = pythonWorker();
+    return {};
+  }
+  if (path.startsWith("/api/jobs/")) return localJob;
+  return quick.ask(path, body);
+}
+
+function duration(seconds) {
+  if (seconds < 90) return Math.round(seconds) + " seconds";
+  if (seconds < 5400) return Math.round(seconds / 60) + " minutes";
+  return (seconds / 3600).toFixed(1) + " hours";
+}
+
+function clock(seconds) {
+  const s = Math.floor(seconds);
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+
+// Rough fit to timings on one machine; work grows with long side x short side cubed.
+function estimate(rows, cols) {
+  const work = Math.max(rows, cols) * Math.min(rows, cols) ** 3;
+  return 5.7 * (work / 1.05e6) ** 1.7;
+}
+
+const wholeBetween = (n, low, high) => Number.isInteger(n) && n >= low && n <= high;
+
+// The size typed into a form, or null while it is not a usable one.
+function size(kind) {
+  if (kind === "mixed") {
+    return areas.length >= MIN_AREAS && areas.every(sizeOk) ? {areas} : null;
+  }
+  if (kind === "circle") {
+    const rings = $("circle-rings").valueAsNumber;
+    return Number.isInteger(rings) && rings >= MIN_RINGS && rings <= MAX_RINGS ? {rings} : null;
+  }
+  const rows = $(kind + "-rows").valueAsNumber, cols = $(kind + "-cols").valueAsNumber;
+  const ok = [rows, cols].every(n => Number.isInteger(n) && n >= 1 && n <= MAX_SIDE);
+  return ok ? {rows, cols} : null;
+}
+
+const SIZE_RULE = {
+  hide: `Rows and columns must be between 1 and ${MAX_SIDE}.`,
+  map: `Rows and columns must be between 1 and ${MAX_SIDE}.`,
+  circle: `Rings must be between ${MIN_RINGS} and ${MAX_RINGS}.`,
+  mixed: `Add at least ${MIN_AREAS} areas. Rows and columns go from 1 to ${MAX_SIDE}, ` +
+         `rings from ${MIN_RINGS} to ${MAX_RINGS}.`,
+};
+
+// Server messages are lower-case fragments; show them as sentences.
+function sentence(text) {
+  return text && text[0].toUpperCase() + text.slice(1) + (/[.!?]$/.test(text) ? "" : ".");
+}
+
+function showError(text) {
+  $("error").textContent = sentence(text);
+  $("error").hidden = !text;
+}
+
+// -- capacity meters ----------------------------------------------------------
+
+// Per form: the capacity {bytes} for `key`, a problem with the shape, or neither yet.
+const KINDS = ["hide", "map", "circle", "mixed"];   // the forms that make a maze
+const capacity = Object.fromEntries(KINDS.map(kind => [kind, {key: ""}]));
+
+function updateMeter(kind) {
+  const state = capacity[kind];
+  const used = byteLength($(kind + "-message").value);
+  const meter = $(kind + "-meter"), fill = meter.querySelector(".fill"), text = meter.querySelector("p");
+  const at = size(kind);
+  let over = false, ready = false;
+  fill.style.width = "0";
+  if (!at) {
+    text.textContent = SIZE_RULE[kind];
+  } else if (state.problem) {
+    over = true;
+    text.textContent = sentence(state.problem);
+  } else if (!state.found) {
+    text.textContent = `${used} bytes · working out how much this holds…`;
+  } else {
+    // Some messages one byte over the guaranteed size still fit; the server decides.
+    const held = state.found.bytes;
+    over = used > held + 1;
+    ready = !over;
+    fill.style.width = Math.min(100, 100 * used / Math.max(1, held)) + "%";
+    const what = {map: "this map", mixed: "this mixed map",
+                  circle: `a circle maze of ${at.rings} rings`}[kind] || `a ${at.rows}×${at.cols} maze`;
+    text.textContent = over
+      ? `${used} of ${held} bytes. Too long for ${what}: enlarge it or shorten the message.`
+      : `${used} of ${held} bytes`;
+  }
+  meter.classList.toggle("over", over);
+  $(kind + "-go").disabled = !ready || !!job;
+}
+
+// Ask the server how much the current shape holds, once typing or drawing pauses.
+const timers = {};
+function refreshCapacity(kind, key, ask) {
+  const state = capacity[kind];
+  if (key !== state.key) Object.assign(state, {key, found: null, problem: ""});
+  showError("");
+  clearTimeout(timers[kind]);
+  updateMeter(kind);
+  if (!key || state.found || state.problem) return;
+  timers[kind] = setTimeout(async () => {
+    try {
+      const found = await ask();
+      if (state.key !== key) return;
+      if (found.problem) state.problem = found.problem;
+      else state.found = found;
+    } catch (error) {
+      if (state.key === key) state.problem = error.message;
+    }
+    updateMeter(kind);
+  }, 250);
+}
+
+function showEstimate(kind, seconds) {
+  $(kind + "-estimate").hidden = seconds < 20;
+  $(kind + "-estimate").textContent =
+    `A maze this size takes roughly ${duration(seconds)} to generate, and as long to read.`;
+}
+
+function hideSizeChanged() {
+  const at = size("hide");
+  showEstimate("hide", at ? estimate(at.rows, at.cols) : 0);
+  refreshCapacity("hide", at ? `${at.rows}x${at.cols}` : "",
+    () => api(`/api/capacity?rows=${at.rows}&cols=${at.cols}`));
+}
+
+// -- jobs ---------------------------------------------------------------------
+
+function setBusy(busy) {
+  $("status").hidden = !busy;
+  $("read-go").disabled = busy;
+  $("readback").disabled = busy;
+  $("cancel").disabled = false;
+  if (busy) {
+    $("bar").querySelector(".fill").style.width = "0";
+    $("status-text").textContent = "Starting…";
+  }
+  for (const kind of KINDS) updateMeter(kind);
+}
+
+// Start a job on the server and poll it to the end; returns its result.
+async function run(kind, body, verb) {
+  showError("");
+  job = "starting";
+  cancelling = false;
+  setBusy(true);
+  const started = Date.now();
+  try {
+    job = (await api("/api/" + kind, body)).job;
+    for (;;) {
+      await sleep(350);
+      const state = await api("/api/jobs/" + job);
+      if (state.error) throw new Error(state.error);
+      if (state.result) return state.result;
+      const part = state.done / state.total;
+      $("bar").querySelector(".fill").style.width = 100 * part + "%";
+      if (!cancelling) $("status-text").textContent =
+        `${verb}… ${Math.floor(100 * part)}% · ${clock((Date.now() - started) / 1000)}`;
+    }
+  } finally {
+    job = null;
+    setBusy(false);
+  }
+}
+
+$("cancel").onclick = () => {
+  if (!job || job === "starting") return;
+  cancelling = true;
+  $("cancel").disabled = true;
+  $("status-text").textContent = "Cancelling…";
+  api(`/api/jobs/${job}/cancel`, {}).catch(() => {});
+};
+
+// -- the paper ----------------------------------------------------------------
+
+function renderStage() {
+  const view = shown[tab];
+  const edit = tab in editing && (editing[tab] || !view);
+  $("editor").hidden = !(edit && tab === "map");
+  $("board").hidden = !(edit && tab === "mixed");
+  $("maze").hidden = edit || !view;
+  $("empty").hidden = edit || !!view;
+  $("empty").textContent = EMPTY[tab] || "";
+  $("caption").hidden = edit || !view;
+  if (edit) (tab === "map" ? drawMap : drawBoard)();
+  if (edit || !view) return;
+  $("maze").src = view.src;
+  $("maze").alt = view.caption;
+  $("caption-text").textContent = view.caption;
+  $("edit-map").hidden = !(tab in editing);
+  $("readback").hidden = !view.png;
+  $("download").hidden = !view.png;
+  if (view.png) {
+    $("download").href = view.src;
+    $("download").download = view.name;
+  }
+}
+
+function selectTab(name) {
+  tab = name;
+  for (const other of TABS) {
+    $("tab-" + other).setAttribute("aria-selected", String(other === name));
+    $(other).hidden = other !== name;
+  }
+  showError("");
+  renderStage();
+}
+
+const TABS = ["hide", "read", "map", "circle", "mixed"];
+for (const name of TABS) $("tab-" + name).onclick = () => selectTab(name);
+
+function showResult(kind, result, seed) {
+  const what = result.what[0].toUpperCase() + result.what.slice(1);
+  shown[kind] = {
+    src: "data:image/png;base64," + result.png, png: result.png, seed, name: result.name,
+    caption: `${what} · ${result.used} of ${result.held} bytes used`,
+  };
+  if (kind in editing) editing[kind] = false;
+  renderStage();
+}
+
+// -- hide a message -------------------------------------------------------------
+
+for (const kind of KINDS) {
+  $(kind + "-message").oninput = () => { showError(""); updateMeter(kind); };
+}
+$("hide-rows").oninput = $("hide-cols").oninput = hideSizeChanged;
+
+$("hide").onsubmit = async event => {
+  event.preventDefault();
+  const at = size("hide");
+  if (!at || job) return;
+  const seed = $("hide-seed").value;
+  try {
+    showResult("hide", await run("encode", {message: $("hide-message").value, seed, ...at}, "Generating"), seed);
+  } catch (error) {
+    showError(error.message);
+  }
+};
+
+// -- read a message -------------------------------------------------------------
+
+function showDecoded(result) {
+  $("decoded").hidden = false;
+  $("decoded-title").textContent = result.bytes
+    ? `${result.bytes} bytes from a ${result.what}` : `This ${result.what} holds an empty message`;
+  $("decoded-text").textContent = result.message;
+  $("decoded-text").hidden = !result.bytes;
+  $("decoded-note").hidden = !result.message.includes("�");
+}
+
+async function decode(file, seed) {
+  $("decoded").hidden = true;
+  try {
+    showDecoded(await run("decode", {file, seed}, "Reading"));
+  } catch (error) {
+    $("decoded").hidden = true;
+    showError(error.message);
+  }
+}
+
+$("readback").onclick = () => {
+  const view = shown[tab];
+  if (!view || !view.png || job) return;
+  shown.read = {src: view.src, caption: view.caption};
+  $("read-seed").value = view.seed;
+  selectTab("read");
+  decode(view.png, view.seed);
+};
+
+$("read").onsubmit = async event => {
+  event.preventDefault();
+  const file = $("file").files[0];
+  if (job) return;
+  if (!file) { showError("Choose a maze file first."); return; }
+  $("decoded").hidden = true;
+  const url = await new Promise((done, fail) => {
+    const reader = new FileReader();
+    reader.onload = () => done(reader.result);
+    reader.onerror = () => fail(reader.error);
+    reader.readAsDataURL(file);
+  });
+  shown.read = file.type === "image/png" ? {src: url, caption: file.name} : null;
+  renderStage();
+  decode(url.slice(url.indexOf(",") + 1), $("read-seed").value);
+};
+
+// -- hide in a custom map -------------------------------------------------------
+
+// open[r][c] is 1 for cells that are part of the maze.
+const map = {rows: 0, cols: 0, open: [], start: [0, 0], end: [0, 0], tool: "cells", cursor: [0, 0], cell: 20};
+
+const isOpen = (r, c) => r >= 0 && r < map.rows && c >= 0 && c < map.cols && map.open[r][c] === 1;
+const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+
+// Fit the map to a new size, keeping the cells that are still inside it.
+function resizeMap(rows, cols) {
+  const old = map.open;
+  map.open = Array.from({length: rows}, (_, r) =>
+    Uint8Array.from({length: cols}, (_, c) => (r < map.rows && c < map.cols ? old[r][c] : 1)));
+  const fresh = !map.rows;
+  map.rows = rows;
+  map.cols = cols;
+  if (fresh || !isOpen(...map.start)) map.start = firstOpen(false) || [0, 0];
+  if (fresh || !isOpen(...map.end) || same(map.start, map.end)) map.end = firstOpen(true) || [0, 0];
+  map.cursor = [Math.min(map.cursor[0], rows - 1), Math.min(map.cursor[1], cols - 1)];
+}
+
+function firstOpen(fromEnd) {
+  for (let i = 0; i < map.rows * map.cols; i++) {
+    const n = fromEnd ? map.rows * map.cols - 1 - i : i;
+    const cell = [Math.floor(n / map.cols), n % map.cols];
+    if (isOpen(...cell) && !(fromEnd && same(cell, map.start))) return cell;
+  }
+  return null;
+}
+
+function drawMap() {
+  const canvas = $("map-canvas");
+  const room = $("editor").clientWidth;
+  if (!room || !map.rows) return;
+  const tall = Math.max(240, innerHeight - 330);
+  const cell = map.cell = Math.max(5, Math.min(34, Math.floor(Math.min(room / map.cols, tall / map.rows))));
+  const scale = devicePixelRatio || 1;
+  canvas.style.width = map.cols * cell + "px";
+  canvas.style.height = map.rows * cell + "px";
+  canvas.width = map.cols * cell * scale;
+  canvas.height = map.rows * cell * scale;
+  const pen = canvas.getContext("2d");
+  pen.scale(scale, scale);
+  pen.fillStyle = "#1c1a15";
+  pen.fillRect(0, 0, map.cols * cell, map.rows * cell);
+  for (let r = 0; r < map.rows; r++) {
+    for (let c = 0; c < map.cols; c++) {
+      if (!map.open[r][c]) continue;
+      pen.fillStyle = "#ffffff";
+      pen.fillRect(c * cell + 0.5, r * cell + 0.5, cell - 1, cell - 1);
+    }
+  }
+  const mark = (place, colour, round, letter) => {
+    const x = place[1] * cell + cell / 2, y = place[0] * cell + cell / 2, reach = cell * 0.36;
+    pen.fillStyle = colour;
+    pen.beginPath();
+    if (round) pen.arc(x, y, reach, 0, 2 * Math.PI);
+    else pen.rect(x - reach, y - reach, 2 * reach, 2 * reach);
+    pen.fill();
+    if (cell >= 16) {
+      pen.fillStyle = "#1c1a15";
+      pen.font = `600 ${Math.round(cell * 0.5)}px system-ui, sans-serif`;
+      pen.textAlign = "center";
+      pen.textBaseline = "middle";
+      pen.fillText(letter, x, y + 0.5);
+    }
+  };
+  mark(map.start, "#5fc28f", true, "S");
+  mark(map.end, "#f08a6c", false, "E");
+  if (document.activeElement === canvas) {
+    pen.strokeStyle = "#2f6fd6";
+    pen.lineWidth = 2;
+    pen.strokeRect(map.cursor[1] * cell + 1, map.cursor[0] * cell + 1, cell - 2, cell - 2);
+  }
+}
+
+function mapChanged() {
+  drawMap();
+  const at = size("map");
+  const cells = map.open.reduce((sum, row) => sum + row.reduce((a, b) => a + b, 0), 0);
+  showEstimate("map", at ? estimate(at.rows, at.cols) * (cells / (map.rows * map.cols)) ** 2 : 0);
+  const body = mapBody();
+  refreshCapacity("map", at ? JSON.stringify(body) : "", () => api("/api/map-capacity", body));
+}
+
+function mapBody() {
+  return {
+    rows: map.rows, cols: map.cols, start: map.start, end: map.end,
+    mask: map.open.map(row => Array.from(row, cell => (cell ? "." : "#")).join("")),
+  };
+}
+
+// Apply the selected tool to a cell.  `paint` is what a drag of the Cells tool sets.
+function applyTool(r, c, paint) {
+  const cell = [r, c];
+  if (map.tool === "cells") {
+    if (same(cell, map.start) || same(cell, map.end)) return;
+    map.open[r][c] = paint;
+  } else {
+    const other = map.tool === "start" ? "end" : "start";
+    if (same(cell, map[other])) return;
+    map.open[r][c] = 1;
+    map[map.tool] = cell;
+  }
+  mapChanged();
+}
+
+function cellAt(event) {
+  const box = $("map-canvas").getBoundingClientRect();
+  const r = Math.floor((event.clientY - box.top) / map.cell), c = Math.floor((event.clientX - box.left) / map.cell);
+  return r >= 0 && r < map.rows && c >= 0 && c < map.cols ? [r, c] : null;
+}
+
+let painting = null;
+$("map-canvas").onpointerdown = event => {
+  const cell = cellAt(event);
+  if (!cell) return;
+  map.cursor = cell;
+  painting = map.open[cell[0]][cell[1]] ? 0 : 1;
+  $("map-canvas").setPointerCapture(event.pointerId);
+  applyTool(...cell, painting);
+};
+$("map-canvas").onpointermove = event => {
+  const cell = cellAt(event);
+  if (painting === null || map.tool !== "cells" || !cell) return;
+  if (map.open[cell[0]][cell[1]] !== painting) applyTool(...cell, painting);
+};
+$("map-canvas").onpointerup = $("map-canvas").onpointercancel = () => { painting = null; };
+
+$("map-canvas").onkeydown = event => {
+  const step = {ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1]}[event.key];
+  if (step) {
+    map.cursor = [Math.max(0, Math.min(map.rows - 1, map.cursor[0] + step[0])),
+                  Math.max(0, Math.min(map.cols - 1, map.cursor[1] + step[1]))];
+    drawMap();
+  } else if (event.key === " " || event.key === "Enter") {
+    applyTool(...map.cursor, map.open[map.cursor[0]][map.cursor[1]] ? 0 : 1);
+  } else {
+    return;
+  }
+  event.preventDefault();
+};
+$("map-canvas").onfocus = $("map-canvas").onblur = drawMap;
+
+for (const button of document.querySelectorAll("[data-tool]")) {
+  button.onclick = () => {
+    map.tool = button.dataset.tool;
+    for (const other of document.querySelectorAll("[data-tool]"))
+      other.setAttribute("aria-pressed", String(other === button));
+  };
+}
+
+$("map-fill").onclick = () => {
+  for (const row of map.open) row.fill(1);
+  mapChanged();
+};
+
+$("map-rows").oninput = $("map-cols").oninput = () => {
+  const at = size("map");
+  if (at) resizeMap(at.rows, at.cols);
+  mapChanged();
+};
+
+$("edit-map").onclick = () => { editing[tab] = true; renderStage(); };
+
+$("map").onsubmit = async event => {
+  event.preventDefault();
+  if (!size("map") || job) return;
+  const seed = $("map-seed").value;
+  try {
+    showResult("map", await run("encode", {message: $("map-message").value, seed, ...mapBody()}, "Generating"), seed);
+  } catch (error) {
+    showError(error.message);
+  }
+};
+
+// -- hide in a circle maze ------------------------------------------------------
+
+// Seconds to generate, measured on one machine up to 24 rings and projected
+// beyond; in between is interpolated.
+const CIRCLE_TIMES = {6: 0.1, 8: 0.6, 12: 1.2, 14: 4.4, 16: 11, 20: 42, 23: 113, 24: 227, 30: 1250};
+
+function circleSeconds(rings) {
+  const known = Object.keys(CIRCLE_TIMES).map(Number);
+  const above = known.find(n => n >= rings) || known[known.length - 1];
+  const below = [...known].reverse().find(n => n <= rings) || known[0];
+  if (above === below) return CIRCLE_TIMES[above];
+  const part = (rings - below) / (above - below);
+  return Math.exp(Math.log(CIRCLE_TIMES[below]) * (1 - part) + Math.log(CIRCLE_TIMES[above]) * part);
+}
+
+function circleSizeChanged() {
+  const at = size("circle");
+  showEstimate("circle", at ? circleSeconds(at.rings) : 0);
+  refreshCapacity("circle", at ? String(at.rings) : "",
+    () => api(`/api/circle-capacity?rings=${at.rings}`));
+}
+
+$("circle-rings").oninput = circleSizeChanged;
+
+$("circle").onsubmit = async event => {
+  event.preventDefault();
+  const at = size("circle");
+  if (!at || job) return;
+  const seed = $("circle-seed").value;
+  try {
+    showResult("circle", await run("encode", {message: $("circle-message").value, seed, ...at}, "Generating"), seed);
+  } catch (error) {
+    showError(error.message);
+  }
+};
+
+// -- hide in a mixed map --------------------------------------------------------
+
+// The areas, in the order the path crosses them.  x and y place an area's
+// corner on the board in half cells.
+const areas = [
+  {kind: "straight", rows: 8, cols: 10},
+  {kind: "circle", rings: 6},
+  {kind: "straight", rows: 8, cols: 10},
+];
+// `start` and `end` number the stretch of outer wall left open on the first
+// and last areas; null leaves the choice to the server, which reports what it
+// chose in `shown`, along with the lines of the joints.
+const board = {scale: 12, left: 0, top: 0, height: 260, picked: 0, drag: null,
+               start: null, end: null, shown: {joints: []}, shownFor: "",
+               checking: false, again: false};
+
+const isRound = area => area.kind === "circle";
+const sizeOk = area => isRound(area) ? wholeBetween(area.rings, MIN_RINGS, MAX_RINGS)
+  : wholeBetween(area.rows, 1, MAX_SIDE) && wholeBetween(area.cols, 1, MAX_SIDE);
+// Width and height in cells, and how many stretches the outer wall has.
+const wide = area => isRound(area) ? 2 * (area.rings + 1) : area.cols;
+const tall = area => isRound(area) ? 2 * (area.rings + 1) : area.rows;
+function gapCount(area) {
+  if (!isRound(area)) return 2 * (area.rows + area.cols);
+  let cells = 6;
+  for (let k = 2; k <= area.rings; k++) if (2 * Math.PI * k / cells > 1.5) cells *= 2;
+  return cells;
+}
+
+// The middle of a stretch of outer wall, on the board in cells, and which way is out.
+function gapAt(area, index) {
+  const x = area.x / 2, y = area.y / 2;
+  if (isRound(area)) {
+    const radius = area.rings + 1, angle = (index + 0.5) * 2 * Math.PI / gapCount(area);
+    return {x: x + radius + radius * Math.cos(angle), y: y + radius + radius * Math.sin(angle),
+            outX: Math.cos(angle), outY: Math.sin(angle)};
+  }
+  const {rows, cols} = area;
+  if (index < 2 * cols) {
+    const bottom = index >= cols;
+    return {x: x + index % cols + 0.5, y: y + (bottom ? rows : 0), outX: 0, outY: bottom ? 1 : -1};
+  }
+  const right = index >= 2 * cols + rows;
+  return {x: x + (right ? cols : 0), y: y + (index - 2 * cols) % rows + 0.5, outX: right ? 1 : -1, outY: 0};
+}
+
+// Put the areas in a row, in path order.
+function lineUp() {
+  const tallest = Math.max(...areas.map(tall));
+  let x = 0;
+  for (const area of areas) {
+    Object.assign(area, {x, y: tallest - tall(area)});
+    x += 2 * wide(area) + 6;
+  }
+}
+
+const boardBody = () => ({
+  areas: areas.map(({kind, rows, cols, rings, x, y}) => ({kind, rows, cols, rings, x, y})),
+  start: board.start, end: board.end,
+});
+
+function mixedChanged() {
+  drawBoard();
+  showError("");
+  const at = size("mixed");
+  const seconds = areas.reduce((sum, area) => sum + (isRound(area)
+    ? circleSeconds(area.rings) : estimate(area.rows, area.cols)), 0);
+  showEstimate("mixed", at ? seconds : 0);
+  if (at) checkBoard();
+  else updateMeter("mixed");
+}
+
+// Ask the server what the board holds, what is wrong with it if anything, and
+// where its joints run.  While an area is dragged this is asked over and
+// over: one question at a time, the next as soon as the last is answered.
+async function checkBoard() {
+  if (board.checking) { board.again = true; return; }
+  board.checking = true;
+  const state = capacity.mixed;
+  do {
+    board.again = false;
+    const body = boardBody(), key = JSON.stringify(body);
+    let found = {}, problem = "";
+    try {
+      found = await api("/api/board-check", body);
+      problem = found.problem || "";
+    } catch (error) {
+      problem = error.message;
+    }
+    if (!problem) { board.shown = found; board.shownFor = key; }
+    Object.assign(state, {key, found: problem ? null : found, problem});
+    updateMeter("mixed");
+    drawBoard();
+  } while (board.again);
+  board.checking = false;
+}
+
+function drawBoard() {
+  const canvas = $("board-canvas"), room = $("board").clientWidth;
+  if (!room || !areas.every(sizeOk)) return;
+  // Fit everything, with a margin of two cells for the start and end marks.
+  const lefts = areas.map(a => a.x / 2), tops = areas.map(a => a.y / 2);
+  const x0 = Math.min(...lefts) - 2, y0 = Math.min(...tops) - 2;
+  const x1 = Math.max(...areas.map((a, n) => lefts[n] + wide(a))) + 2;
+  const y1 = Math.max(...areas.map((a, n) => tops[n] + tall(a))) + 2;
+  const high = Math.max(260, innerHeight - 300);
+  // Keep the view steady while something is being dragged, or it would swim.
+  if (!board.drag) {
+    board.scale = Math.max(3, Math.min(20, room / (x1 - x0), high / (y1 - y0)));
+    // Centre the areas across the paper.
+    board.left = x0 - (room / board.scale - (x1 - x0)) / 2;
+    board.top = y0;
+    board.height = Math.max(160, Math.ceil((y1 - y0) * board.scale));
+  }
+  const s = board.scale, ratio = devicePixelRatio || 1;
+  canvas.style.width = room + "px";
+  canvas.style.height = board.height + "px";
+  canvas.width = room * ratio;
+  canvas.height = board.height * ratio;
+  const pen = canvas.getContext("2d");
+  pen.scale(ratio, ratio);
+  pen.translate(-board.left * s, -board.top * s);
+  const ink = "#1c1a15", faint = "rgba(28, 26, 21, 0.16)";
+  const thick = Math.max(1.5, s / 4);
+  const run = points => {
+    pen.beginPath();
+    points.forEach(([x, y], n) => (n ? pen.lineTo(x * s, y * s) : pen.moveTo(x * s, y * s)));
+    pen.stroke();
+  };
+
+  // The joints as the server last worked them out: the lanes an area grows
+  // across to its neighbour.  They go grey while the board has moved on and
+  // the answer for where it is now has not come back, or cannot be given.
+  const fresh = board.shownFor === JSON.stringify(boardBody());
+  for (const joint of board.shown.joints || []) {
+    pen.lineWidth = 1;
+    pen.strokeStyle = fresh ? faint : "rgba(28, 26, 21, 0.07)";
+    joint.inside.forEach(run);
+    pen.lineWidth = thick;
+    pen.strokeStyle = fresh ? ink : "#c9c3b4";
+    joint.edges.forEach(run);
+  }
+
+  areas.forEach((area, n) => {
+    const x = area.x / 2 * s, y = area.y / 2 * s, w = wide(area) * s, h = tall(area) * s;
+    pen.fillStyle = "#ffffff";
+    pen.strokeStyle = ink;
+    pen.lineWidth = thick;
+    pen.beginPath();
+    if (isRound(area)) pen.arc(x + w / 2, y + h / 2, w / 2, 0, 2 * Math.PI);
+    else pen.rect(x, y, w, h);
+    pen.fill();
+    if (isRound(area)) {
+      pen.stroke();
+    } else {
+      // No wall on a side the area grows from: the maze carries on there.
+      const grown = (board.shown.joints || []).filter(joint => joint.owner === n).map(joint => joint.side);
+      const sides = {top: [x, y, x + w, y], bottom: [x, y + h, x + w, y + h],
+                     left: [x, y, x, y + h], right: [x + w, y, x + w, y + h]};
+      pen.lineCap = "square";
+      for (const [name, [ax, ay, bx, by]] of Object.entries(sides)) {
+        if (grown.includes(name)) continue;
+        pen.beginPath();
+        pen.moveTo(ax, ay);
+        pen.lineTo(bx, by);
+        pen.stroke();
+      }
+      pen.lineCap = "butt";
+    }
+    // A hint of the cells inside.
+    pen.strokeStyle = faint;
+    pen.lineWidth = 1;
+    pen.beginPath();
+    if (isRound(area)) {
+      for (let k = 1; k <= area.rings; k++) {
+        pen.moveTo(x + w / 2 + k * s, y + h / 2);
+        pen.arc(x + w / 2, y + h / 2, k * s, 0, 2 * Math.PI);
+      }
+    } else {
+      for (let c = 1; c < area.cols; c++) { pen.moveTo(x + c * s, y); pen.lineTo(x + c * s, y + h); }
+      for (let r = 1; r < area.rows; r++) { pen.moveTo(x, y + r * s); pen.lineTo(x + w, y + r * s); }
+    }
+    pen.stroke();
+    if (n === board.picked && document.activeElement === canvas) {
+      pen.strokeStyle = "#2f6fd6";
+      pen.lineWidth = 2;
+      pen.strokeRect(x - 4, y - 4, w + 8, h + 8);
+    }
+    pen.fillStyle = "rgba(28, 26, 21, 0.55)";
+    pen.font = `600 ${Math.round(Math.max(12, Math.min(28, s * 1.6)))}px system-ui, sans-serif`;
+    pen.textAlign = "center";
+    pen.textBaseline = "middle";
+    pen.fillText(String(n + 1), x + w / 2, y + h / 2);
+  });
+
+  // The start and the end: an opening in the wall with a dot to drag it by.
+  for (const mark of marks()) {
+    const gap = gapAt(mark.area, mark.index), x = gap.x * s, y = gap.y * s;
+    pen.strokeStyle = "#ffffff";
+    pen.lineWidth = thick + 1.5;
+    pen.beginPath();
+    pen.moveTo(x - gap.outY * s * 0.4, y + gap.outX * s * 0.4);
+    pen.lineTo(x + gap.outY * s * 0.4, y - gap.outX * s * 0.4);
+    pen.stroke();
+    pen.fillStyle = mark.colour;
+    pen.beginPath();
+    pen.arc(x + gap.outX * s * 0.5, y + gap.outY * s * 0.5, Math.max(5, s * 0.4), 0, 2 * Math.PI);
+    pen.fill();
+    pen.strokeStyle = "#ffffff";
+    pen.lineWidth = 1.5;
+    pen.stroke();
+  }
+}
+
+// Where the start and end are: as chosen here, or else as the server chose.
+function marks() {
+  const found = [];
+  for (const [way, n, colour] of [["start", 0, "#5fc28f"], ["end", areas.length - 1, "#f08a6c"]]) {
+    const index = board[way] ?? board.shown[way];
+    if (Number.isInteger(index) && index < gapCount(areas[n])) found.push({way, area: areas[n], index, colour});
+  }
+  return found;
+}
+
+// Board position, in cells, of a pointer event.
+function boardPoint(event) {
+  const box = $("board-canvas").getBoundingClientRect();
+  return {x: (event.clientX - box.left) / board.scale + board.left,
+          y: (event.clientY - box.top) / board.scale + board.top};
+}
+
+$("board-canvas").onpointerdown = event => {
+  const at = boardPoint(event), grab = Math.max(0.9, 11 / board.scale);
+  board.drag = null;
+  // A dot first, since it sits on the edge of its area.
+  for (const mark of marks()) {
+    const gap = gapAt(mark.area, mark.index);
+    if (Math.hypot(gap.x + gap.outX * 0.5 - at.x, gap.y + gap.outY * 0.5 - at.y) < grab) board.drag = {way: mark.way, area: mark.area};
+  }
+  if (!board.drag) {
+    for (let n = areas.length - 1; n >= 0; n--) {
+      const area = areas[n], x = at.x - area.x / 2, y = at.y - area.y / 2;
+      if (x >= 0 && y >= 0 && x <= wide(area) && y <= tall(area)) {
+        board.drag = {n, dx: x, dy: y};
+        board.picked = n;
+        break;
+      }
+    }
+  }
+  if (!board.drag) return;
+  $("board-canvas").setPointerCapture(event.pointerId);
+  drawBoard();
+};
+
+$("board-canvas").onpointermove = event => {
+  const drag = board.drag;
+  if (!drag) return;
+  const at = boardPoint(event);
+  if (drag.way) {
+    // The stretch of that area's wall nearest the pointer.
+    let best = Infinity, found = 0;
+    for (let n = 0; n < gapCount(drag.area); n++) {
+      const gap = gapAt(drag.area, n), far = Math.hypot(gap.x - at.x, gap.y - at.y);
+      if (far < best) { best = far; found = n; }
+    }
+    if (found === board[drag.way]) return;
+    board[drag.way] = found;
+  } else {
+    const area = areas[drag.n];
+    const x = Math.round((at.x - drag.dx) * 2), y = Math.round((at.y - drag.dy) * 2);
+    if (x === area.x && y === area.y) return;
+    area.x = x;
+    area.y = y;
+  }
+  mixedChanged();
+};
+
+$("board-canvas").onpointerup = $("board-canvas").onpointercancel = () => {
+  if (!board.drag) return;
+  board.drag = null;
+  drawBoard();
+};
+
+$("board-canvas").onkeydown = event => {
+  const step = {ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0]}[event.key];
+  if (step) {
+    areas[board.picked].x += step[0];
+    areas[board.picked].y += step[1];
+    mixedChanged();
+  } else if (event.key === "PageDown" || event.key === "PageUp") {
+    board.picked = (board.picked + (event.key === "PageDown" ? 1 : areas.length - 1)) % areas.length;
+    drawBoard();
+  } else {
+    return;
+  }
+  event.preventDefault();
+};
+$("board-canvas").onfocus = $("board-canvas").onblur = drawBoard;
+
+// Let the server place the start and the end again.
+function freeMarks() { board.start = board.end = null; }
+
+$("board-auto").onclick = () => { freeMarks(); mixedChanged(); };
+$("board-row").onclick = () => { lineUp(); freeMarks(); mixedChanged(); };
+
+// Rebuild the list.  Typing a size only updates the area, so the box keeps focus.
+function drawAreas() {
+  const list = $("areas");
+  list.replaceChildren();
+  areas.forEach((area, n) => {
+    const item = document.createElement("li");
+    const kind = document.createElement("span");
+    kind.className = "kind";
+    kind.innerHTML = `<b>${n + 1}.</b> ${isRound(area) ? "Circle" : "Straight"}`;
+    item.append(kind);
+    const box = (field, label, max) => {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = field === "rings" ? MIN_RINGS : 1;
+      input.max = max;
+      input.value = area[field];
+      input.setAttribute("aria-label", `${label} of area ${n + 1}`);
+      input.oninput = () => { area[field] = input.valueAsNumber; freeMarks(); mixedChanged(); };
+      return input;
+    };
+    if (isRound(area)) item.append(box("rings", "Rings", MAX_RINGS), "rings");
+    else item.append(box("rows", "Rows", MAX_SIDE), "×", box("cols", "Columns", MAX_SIDE));
+    const button = (text, label, disabled, act) => {
+      const made = document.createElement("button");
+      made.type = "button";
+      made.textContent = text;
+      made.disabled = disabled;
+      made.setAttribute("aria-label", `${label} area ${n + 1}`);
+      made.onclick = () => { act(); board.picked = 0; freeMarks(); drawAreas(); mixedChanged(); };
+      return made;
+    };
+    const swap = other => { [areas[n], areas[other]] = [areas[other], areas[n]]; };
+    item.append(
+      button("↑", "Move earlier:", n === 0, () => swap(n - 1)),
+      button("↓", "Move later:", n === areas.length - 1, () => swap(n + 1)),
+      button("×", "Remove", false, () => areas.splice(n, 1)));
+    list.append(item);
+  });
+  $("add-straight").disabled = $("add-circle").disabled = areas.length >= MAX_AREAS;
+}
+
+// A new area goes to the right of everything, level with the last one.
+function addArea(area) {
+  const right = Math.max(0, ...areas.map(a => a.x + 2 * wide(a) + 6));
+  areas.push({...area, x: right, y: areas.length ? areas[areas.length - 1].y : 0});
+  freeMarks();
+  drawAreas();
+  mixedChanged();
+}
+
+$("add-straight").onclick = () => addArea({kind: "straight", rows: 8, cols: 10});
+$("add-circle").onclick = () => addArea({kind: "circle", rings: 6});
+
+$("mixed").onsubmit = async event => {
+  event.preventDefault();
+  if (!size("mixed") || job) return;
+  const seed = $("mixed-seed").value;
+  try {
+    showResult("mixed", await run("encode",
+      {message: $("mixed-message").value, seed, ...boardBody()}, "Generating"), seed);
+  } catch (error) {
+    showError(error.message);
+  }
+};
+
+addEventListener("resize", () => {
+  if (!$("editor").hidden) drawMap();
+  if (!$("board").hidden) drawBoard();
+});
+
+resizeMap(16, 24);
+hideSizeChanged();
+mapChanged();
+circleSizeChanged();
+lineUp();
+drawAreas();
+mixedChanged();
+renderStage();
+</script>
+</body>
+</html>

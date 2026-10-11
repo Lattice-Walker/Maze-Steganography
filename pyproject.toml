@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mazestego"
+version = "0.1.0"
+description = "Hide secret messages in the structure of generated mazes."
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.scripts]
+mazestego = "mazestego.cli:main"
+
+[tool.setuptools]
+packages = ["mazestego"]
+
+[tool.setuptools.package-data]
+mazestego = ["ui.html"]
